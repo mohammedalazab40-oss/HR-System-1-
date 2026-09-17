@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>بصمة الموبايل - MODO HR</title>
+<style>
+  :root{--p:#1E3A8A;--ok:#10B981;--bg:#F1F5F9}*{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:#0F172A;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+  .card{background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(0,0,0,.08);width:100%;max-width:420px;padding:26px 22px}
+  h1{margin:0 0 4px;font-size:22px;color:var(--p);text-align:center}.sub{text-align:center;color:#64748B;font-size:13px;margin-bottom:18px}
+  label{display:block;font-weight:600;margin:12px 0 6px;font-size:14px}
+  input{width:100%;padding:14px;border:1.5px solid #CBD5E1;border-radius:12px;font-size:20px;text-align:center;letter-spacing:3px;direction:ltr}
+  .btns{display:flex;gap:10px;margin-top:20px}button{flex:1;padding:16px;border:0;border-radius:12px;font-size:18px;font-weight:700;color:#fff}
+  #btnIn{background:var(--ok)}#btnOut{background:#F59E0B}button:disabled{opacity:.55}
+  .msg{margin-top:18px;padding:14px;border-radius:12px;font-size:15px;line-height:1.7;white-space:pre-line;display:none}
+  .ok{display:block;background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0}.bad{display:block;background:#FEF2F2;color:#991B1B;border:1px solid #FECACA}
+  .info{display:block;background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE}.gps{margin-top:14px;font-size:12px;color:#64748B;text-align:center;direction:ltr}
+  .foot{margin-top:16px;text-align:center;font-size:11px;color:#94A3B8}
+  .cam{position:relative;width:180px;height:180px;margin:10px auto 0;border-radius:50%;overflow:hidden;border:4px solid #CBD5E1;background:#0F172A}
+  .cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .cam.ok{border-color:#10B981}.camhint{text-align:center;font-size:12px;color:#64748B;margin-top:6px}
+  #btnCam{display:none;width:100%;margin-top:8px;padding:12px;font-size:15px;background:#1E3A8A}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📍 بصمة الحضور</h1>
+  <div class="sub">Mobile Attendance — يجب أن تكون داخل نطاق الفندق</div>
+  <label>رقم البصمة / Clock No</label>
+  <input id="clock" inputmode="numeric" placeholder="000">
+  <div id="pinBox"><label>الرقم السري / PIN</label><input id="pin" type="password" inputmode="numeric" placeholder="••••"></div>
+  <div id="camBox">
+    <div class="cam" id="cam"><video id="vid" autoplay playsinline muted></video></div>
+    <div class="camhint" id="camHint">📷 ضع وجهك داخل الدائرة — تُلتقط الصورة تلقائيًا عند البصمة</div>
+    <button id="btnCam" type="button" onclick="startCam()">📷 تشغيل الكاميرا / Enable camera</button>
+  </div>
+  <div class="btns"><button id="btnIn" onclick="punch('in')">✅ حضور</button><button id="btnOut" onclick="punch('out')">🚪 انصراف</button></div>
+  <div id="msg" class="msg"></div>
+  <div id="gps" class="gps">GPS: —</div>
+  <div class="foot">MODO HR · Al-Moudira</div>
+</div>
+<script>
+// ── رابط Apps Script (ينتهي بـ /exec) ─────────────────────────────────────
+var API = "https://script.google.com/macros/s/AKfycbwN5SzreKncCootNPCPpuAPfWP-AI5we7yBxvnFBxRWmJja7lUBKtCr-OYgFfrIdaH_YQ/exec";
+
+var $=function(i){return document.getElementById(i)};var busy=false;var cfg={require_pin:true,require_photo:true};var stream=null;
+try{var s=localStorage.getItem("modo_clock");if(s)$("clock").value=s}catch(e){}
+function show(c,t){var m=$("msg");m.className="msg "+c;m.textContent=t}
+function api(body){
+  // Apps Script يقبل CORS مع text/plain فقط
+  return fetch(API,{method:"POST",body:JSON.stringify(body),headers:{"Content-Type":"text/plain;charset=utf-8"},redirect:"follow"})
+    .then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){throw new Error("رد غير متوقع من السيرفر")}});
+}
+api({action:"page_config"}).then(function(c){if(c&&c.ok){cfg=c;if(!c.require_pin)$("pinBox").style.display="none";if(!c.require_photo)$("camBox").style.display="none";else startCam()}}).catch(function(){startCam()});
+function startCam(){$("btnCam").style.display="none";
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$("camHint").textContent="⚠️ المتصفح لا يدعم الكاميرا — افتح الرابط في Chrome";return}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:640}},audio:false})
+  .then(function(s){stream=s;$("vid").srcObject=s;$("cam").className="cam ok";$("camHint").textContent="📷 ضع وجهك داخل الدائرة — تُلتقط الصورة تلقائيًا عند البصمة"})
+  .catch(function(e){var n=e&&e.name||"";var msg={NotAllowedError:"الكاميرا محظورة لهذا الموقع: اضغط 🔒 بجوار العنوان → الأذونات → الكاميرا → السماح ثم أعد التحميل",NotFoundError:"لا توجد كاميرا أمامية في هذا الجهاز",NotReadableError:"الكاميرا مستخدمة من تطبيق آخر — أغلقه وحاول مرة أخرى",SecurityError:"المتصفح يمنع الكاميرا في هذه الصفحة — افتح الرابط في Chrome"}[n]||("تعذّر تشغيل الكاميرا ("+n+")");
+    $("camHint").textContent="⚠️ "+msg;$("btnCam").style.display="block"})}
+function snap(){var v=$("vid");if(!stream||!v.videoWidth)return "";var c=document.createElement("canvas");var s=Math.min(v.videoWidth,v.videoHeight);c.width=480;c.height=480;
+  c.getContext("2d").drawImage(v,(v.videoWidth-s)/2,(v.videoHeight-s)/2,s,s,0,0,480,480);return c.toDataURL("image/jpeg",0.7)}
+function getPos(){return new Promise(function(res,rej){if(!navigator.geolocation){rej(new Error("المتصفح لا يدعم تحديد الموقع"));return}
+  navigator.geolocation.getCurrentPosition(res,function(e){var m={1:"يجب السماح بالوصول إلى الموقع من إعدادات المتصفح",2:"تعذّر تحديد الموقع، تأكد من تشغيل GPS",3:"انتهت مهلة تحديد الموقع، حاول مرة أخرى"};rej(new Error(m[e.code]||e.message))},{enableHighAccuracy:true,timeout:20000,maximumAge:0})})}
+function done(){busy=false;$("btnIn").disabled=$("btnOut").disabled=false}
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&cfg.require_photo){var t=stream&&stream.getVideoTracks()[0];if(!t||t.readyState!=="live"||t.muted)startCam()}});
+window.addEventListener("pageshow",function(){if(cfg.require_photo&&(!stream||stream.getVideoTracks()[0].readyState!=="live"))startCam()});
+function punch(type){if(busy)return;var clock=$("clock").value.trim(),pin=$("pin").value.trim();if(!clock){show("bad","أدخل رقم البصمة");return}
+  var photo=cfg.require_photo?snap():"";if(cfg.require_photo&&!photo){show("bad","📷 لم تُلتقط صورة الوجه — اسمح بالكاميرا وحاول مرة أخرى");return}
+  busy=true;$("btnIn").disabled=$("btnOut").disabled=true;show("info","⏳ جاري تحديد موقعك…");
+  getPos().then(function(p){var c=p.coords;$("gps").textContent="GPS: "+c.latitude.toFixed(5)+", "+c.longitude.toFixed(5)+" (±"+Math.round(c.accuracy)+"m)";show("info","⏳ جاري التحقق من الموقع…");
+    return api({action:"punch",clock_no:clock,pin:pin,lat:c.latitude,lng:c.longitude,accuracy:c.accuracy,type:type,device:navigator.userAgent,photo:photo})})
+  .then(function(j){if(j.ok){try{localStorage.setItem("modo_clock",clock)}catch(e){}show("ok",j.message+(j.name?"\n"+j.name:""));if(navigator.vibrate)navigator.vibrate(200)}else show("bad","❌ "+(j.message||j.error||"خطأ غير معروف — تأكد من نشر آخر إصدار من Code.gs"));done()})
+  .catch(function(e){show("bad","❌ "+e.message);done()})}
+</script>
+</body>
+</html>
