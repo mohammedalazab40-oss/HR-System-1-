@@ -122,13 +122,20 @@ var API = "https://script.google.com/macros/s/AKfycbywnYqD8DrvLkhKgoMoVQqXwrak1s
 var $=function(i){return document.getElementById(i)};var busy=false;var cfg={require_pin:true,require_photo:true};var stream=null;
 try{var s=localStorage.getItem("modo_clock");if(s)$("clock").value=s}catch(e){}
 function show(c,t){var m=$("msg");m.className="msg "+c;m.textContent=t}
-function api(body){
-  // Apps Script يقبل CORS مع text/plain فقط
-  return fetch(API,{method:"POST",body:JSON.stringify(body),headers:{"Content-Type":"text/plain;charset=utf-8"},redirect:"follow"})
-    .then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){
+function parseReply(t){try{return JSON.parse(t)}catch(e){
       var plain=t.replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
       if(/authori[sz]ation|تفويض|إذن/i.test(plain)) throw new Error("السكريبت يحتاج تفويضًا جديدًا (صلاحية Drive للصور): افتح Apps Script → شغّل الدالة photoFolder مرة → وافق على الأذونات → انشر إصدارًا جديدًا");
-      throw new Error("رد غير متوقع من السيرفر: "+plain.slice(0,180))}});
+      throw new Error("رد غير متوقع من السيرفر: "+plain.slice(0,180))}}
+function api(body){
+  // Apps Script يقبل CORS مع text/plain — ولو فشل POST (Failed to fetch) نجرّب GET تلقائيًا
+  var json=JSON.stringify(body);
+  return fetch(API,{method:"POST",body:json,headers:{"Content-Type":"text/plain;charset=utf-8"},redirect:"follow"})
+    .then(function(r){return r.text()})
+    .catch(function(e){
+      if(json.length>6000)throw new Error("تعذّر الاتصال بالسيرفر (تحقق من الإنترنت) — "+e.message);
+      return fetch(API+"?payload="+encodeURIComponent(json),{method:"GET",redirect:"follow"}).then(function(r){return r.text()})
+        .catch(function(e2){throw new Error("تعذّر الاتصال بالسيرفر (تحقق من الإنترنت) — "+e2.message)})})
+    .then(parseReply);
 }
 api({action:"page_config"}).then(function(c){if(c&&c.ok){cfg=c;if(!c.require_pin)$("pinBox").style.display="none";if(!c.require_photo)$("camBox").style.display="none";else startCam()}}).catch(function(){startCam()});
 function startCam(){$("btnCam").style.display="none";
