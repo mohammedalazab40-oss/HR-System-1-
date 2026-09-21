@@ -3,7 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>بصمة الموبايل - MODO HR</title>
+<title>MODO HR — بصمة الموبايل</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1E3A8A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="MODO HR">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
   :root{--p:#1E3A8A;--ok:#10B981;--bg:#F1F5F9}*{box-sizing:border-box}
   body{margin:0;font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:#0F172A;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -21,26 +29,93 @@
   .cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
   .cam.ok{border-color:#10B981}.camhint{text-align:center;font-size:12px;color:#64748B;margin-top:6px}
   #btnCam{display:none;width:100%;margin-top:8px;padding:12px;font-size:15px;background:#1E3A8A}
+  .tabs{display:flex;gap:6px;margin:14px 0 6px;background:#E2E8F0;border-radius:12px;padding:4px}
+  .tabs button{flex:1;padding:10px 4px;font-size:14px;border-radius:9px;background:transparent;color:#334155;font-weight:700}
+  .tabs button.on{background:#fff;color:var(--p);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .pane{display:none}.pane.on{display:block}
+  select,textarea,input[type=date]{width:100%;padding:12px;border:1.5px solid #CBD5E1;border-radius:12px;font-size:16px;font-family:inherit;background:#fff}
+  textarea{min-height:70px;letter-spacing:0;text-align:right}
+  input[type=date]{letter-spacing:0;text-align:right;direction:rtl}
+  .item{border:1px solid #E2E8F0;border-radius:12px;padding:10px 12px;margin-top:8px;font-size:14px;line-height:1.6;background:#F8FAFC}
+  .st{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .st.Pending{background:#FEF3C7;color:#92400E}.st.Approved{background:#D1FAE5;color:#065F46}.st.Rejected{background:#FEE2E2;color:#991B1B}
+  .slip{border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;margin-top:10px}
+  .slip .h{background:var(--p);color:#fff;padding:10px 12px;font-weight:700;display:flex;justify-content:space-between}
+  .slip .r{display:flex;justify-content:space-between;padding:7px 12px;border-top:1px solid #F1F5F9;font-size:14px}
+  .slip .r.sub{background:#F8FAFC;font-weight:700;color:var(--p)}.slip .r.neg span:last-child{color:#B91C1C}
+  .slip .r.net{background:#ECFDF5;font-weight:800;font-size:16px;color:#065F46}
+  .sec{font-size:12px;color:#64748B;margin:10px 0 4px;font-weight:700}
+  .btn1{width:100%;margin-top:14px;padding:14px;font-size:16px;background:var(--p)}
+  #installBar{display:none;margin:-6px 0 12px;padding:10px 12px;border-radius:12px;background:#EFF6FF;border:1px solid #BFDBFE;font-size:13px;color:#1E40AF;align-items:center;justify-content:space-between;gap:8px}
+  #installBar button{flex:0 0 auto;padding:8px 14px;font-size:13px;background:var(--p);border-radius:9px}
+  #offline{display:none;text-align:center;font-size:12px;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:6px;margin-bottom:8px}.btn2{width:100%;margin-top:8px;padding:12px;font-size:14px;background:#64748B}
 </style>
 </head>
 <body>
 <div class="card">
   <h1>📍 بصمة الحضور</h1>
   <div class="sub">Mobile Attendance — يجب أن تكون داخل نطاق الفندق</div>
+  <div id="offline">⚠️ لا يوجد اتصال بالإنترنت — البصمة تحتاج إنترنت</div>
+  <div id="installBar"><span>📲 أضف التطبيق إلى شاشة هاتفك للوصول السريع</span><button type="button" onclick="doInstall()">تثبيت</button></div>
   <label>رقم البصمة / Clock No</label>
   <input id="clock" inputmode="numeric" placeholder="000">
   <div id="pinBox"><label>الرقم السري / PIN</label><input id="pin" type="password" inputmode="numeric" placeholder="••••"></div>
+
+  <div class="tabs">
+    <button id="tabPunch" class="on" onclick="showTab('punch')">📍 بصمة</button>
+    <button id="tabLeave" onclick="showTab('leave')">🏖️ إجازة</button>
+    <button id="tabSlip" onclick="showTab('slip')">💰 راتبي</button>
+  </div>
+
+  <div id="panePunch" class="pane on">
   <div id="camBox">
     <div class="cam" id="cam"><video id="vid" autoplay playsinline muted></video></div>
     <div class="camhint" id="camHint">📷 ضع وجهك داخل الدائرة — تُلتقط الصورة تلقائيًا عند البصمة</div>
     <button id="btnCam" type="button" onclick="startCam()">📷 تشغيل الكاميرا / Enable camera</button>
   </div>
   <div class="btns"><button id="btnIn" onclick="punch('in')">✅ حضور</button><button id="btnOut" onclick="punch('out')">🚪 انصراف</button></div>
+  </div>
+
+  <div id="paneLeave" class="pane">
+    <label>نوع الإجازة / Leave type</label>
+    <select id="lvType">
+      <option value="Annual">إجازة سنوية — Annual</option>
+      <option value="Sick Leave">إجازة مرضية — Sick Leave</option>
+      <option value="Emergency">إجازة عارضة — Emergency</option>
+      <option value="Day Off">يوم راحة — Day Off</option>
+      <option value="Unpaid">بدون راتب — Unpaid</option>
+      <option value="Bereavement">وفاة — Bereavement</option>
+      <option value="Maternity">وضع — Maternity</option>
+    </select>
+    <label>من / From</label><input type="date" id="lvFrom">
+    <label>إلى / To</label><input type="date" id="lvTo">
+    <label>السبب / Reason</label><textarea id="lvReason" placeholder="اختياري"></textarea>
+    <button class="btn1" onclick="sendLeave()">📨 إرسال طلب الإجازة</button>
+    <button class="btn2" onclick="loadMy('leave')">🔄 عرض طلباتي وحالتها</button>
+    <div id="lvList"></div>
+  </div>
+
+  <div id="paneSlip" class="pane">
+    <button class="btn1" onclick="loadMy('slip')">💰 عرض قسائم راتبي</button>
+    <div id="slipList"></div>
+  </div>
+
   <div id="msg" class="msg"></div>
   <div id="gps" class="gps">GPS: —</div>
   <div class="foot">MODO HR · Al-Moudira</div>
 </div>
 <script>
+// ── PWA: تسجيل Service Worker + زر التثبيت ──
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+var deferredPrompt=null;
+window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferredPrompt=e;if(!window.matchMedia("(display-mode: standalone)").matches)document.getElementById("installBar").style.display="flex"});
+function doInstall(){if(!deferredPrompt)return;deferredPrompt.prompt();deferredPrompt.userChoice.then(function(){deferredPrompt=null;document.getElementById("installBar").style.display="none"})}
+window.addEventListener("appinstalled",function(){document.getElementById("installBar").style.display="none"});
+function netState(){document.getElementById("offline").style.display=navigator.onLine?"none":"block"}
+window.addEventListener("online",netState);window.addEventListener("offline",netState);document.addEventListener("DOMContentLoaded",netState);
+// iPhone: لا يوجد beforeinstallprompt — تلميح يدوي
+(function(){var ua=navigator.userAgent;if(/iPhone|iPad/.test(ua)&&!window.navigator.standalone){var b=document.getElementById("installBar");b.innerHTML="<span>📲 للتثبيت على iPhone: زر المشاركة ⬆︎ ثم «إضافة إلى الشاشة الرئيسية»</span>";b.style.display="flex"}})();
+
 // ── رابط Apps Script (ينتهي بـ /exec) ─────────────────────────────────────
 var API = "https://script.google.com/macros/s/AKfycbwN5SzreKncCootNPCPpuAPfWP-AI5we7yBxvnFBxRWmJja7lUBKtCr-OYgFfrIdaH_YQ/exec";
 
@@ -50,7 +125,10 @@ function show(c,t){var m=$("msg");m.className="msg "+c;m.textContent=t}
 function api(body){
   // Apps Script يقبل CORS مع text/plain فقط
   return fetch(API,{method:"POST",body:JSON.stringify(body),headers:{"Content-Type":"text/plain;charset=utf-8"},redirect:"follow"})
-    .then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){throw new Error("رد غير متوقع من السيرفر")}});
+    .then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){
+      var plain=t.replace(/<style[\s\S]*?<\/style>/gi,"").replace(/<script[\s\S]*?<\/script>/gi,"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+      if(/authori[sz]ation|تفويض|إذن/i.test(plain)) throw new Error("السكريبت يحتاج تفويضًا جديدًا (صلاحية Drive للصور): افتح Apps Script → شغّل الدالة photoFolder مرة → وافق على الأذونات → انشر إصدارًا جديدًا");
+      throw new Error("رد غير متوقع من السيرفر: "+plain.slice(0,180))}});
 }
 api({action:"page_config"}).then(function(c){if(c&&c.ok){cfg=c;if(!c.require_pin)$("pinBox").style.display="none";if(!c.require_photo)$("camBox").style.display="none";else startCam()}}).catch(function(){startCam()});
 function startCam(){$("btnCam").style.display="none";
@@ -64,6 +142,38 @@ function snap(){var v=$("vid");if(!stream||!v.videoWidth)return "";var c=documen
 function getPos(){return new Promise(function(res,rej){if(!navigator.geolocation){rej(new Error("المتصفح لا يدعم تحديد الموقع"));return}
   navigator.geolocation.getCurrentPosition(res,function(e){var m={1:"يجب السماح بالوصول إلى الموقع من إعدادات المتصفح",2:"تعذّر تحديد الموقع، تأكد من تشغيل GPS",3:"انتهت مهلة تحديد الموقع، حاول مرة أخرى"};rej(new Error(m[e.code]||e.message))},{enableHighAccuracy:true,timeout:20000,maximumAge:0})})}
 function done(){busy=false;$("btnIn").disabled=$("btnOut").disabled=false}
+function showTab(t){["punch","leave","slip"].forEach(function(k){var K=k.charAt(0).toUpperCase()+k.slice(1);$("pane"+K).className="pane"+(k===t?" on":"");$("tab"+K).className=(k===t?"on":"")});show("info","");$("msg").className="msg";
+  if(t==="punch"&&cfg.require_photo)startCam()}
+function creds(){var clock=$("clock").value.trim(),pin=$("pin").value.trim();if(!clock){show("bad","أدخل رقم البصمة");return null}
+  if(cfg.require_pin&&!pin){show("bad","أدخل الرقم السري");return null}return {clock_no:clock,pin:pin}}
+function isoToDMY(v){if(!v)return"";var p=v.split("-");return p[2]+"/"+p[1]+"/"+p[0]}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function sendLeave(){if(busy)return;var c=creds();if(!c)return;var from=isoToDMY($("lvFrom").value),to=isoToDMY($("lvTo").value);
+  if(!from||!to){show("bad","اختر تاريخ البداية والنهاية");return}
+  busy=true;show("info","⏳ جاري إرسال الطلب…");
+  api(Object.assign({action:"leave_request",leave_type:$("lvType").value,from:from,to:to,reason:$("lvReason").value.trim()},c))
+  .then(function(j){if(j.ok){try{localStorage.setItem("modo_clock",c.clock_no)}catch(e){}show("ok",j.message);$("lvReason").value="";loadMy("leave")}else show("bad","❌ "+(j.message||j.error||"خطأ"))})
+  .catch(function(e){show("bad","❌ "+e.message)}).then(function(){busy=false})}
+function loadMy(which){if(busy)return;var c=creds();if(!c)return;busy=true;show("info","⏳ جاري التحميل…");
+  api(Object.assign({action:"my_data"},c)).then(function(j){
+    if(!j.ok){show("bad","❌ "+(j.message||j.error||"خطأ"));return}
+    try{localStorage.setItem("modo_clock",c.clock_no)}catch(e){}
+    $("msg").className="msg";
+    if(which==="leave"){var h="<div class=sec>طلباتي — "+esc(j.name)+"</div>";
+      if(!j.leaves.length)h+="<div class=item>لا توجد طلبات سابقة</div>";
+      j.leaves.forEach(function(l){h+="<div class=item><b>"+esc(l.type)+"</b> · "+esc(l.days)+" يوم <span class='st "+esc(l.status)+"'>"+({Pending:"قيد الموافقة",Approved:"مقبول ✅",Rejected:"مرفوض ❌"}[l.status]||esc(l.status))+"</span><br>"
+        +"من "+esc(l.from)+" إلى "+esc(l.to)+(l.reason?"<br><span style='color:#64748B'>"+esc(l.reason)+"</span>":"")+(l.note?"<br><span style='color:#B45309'>ملاحظة HR: "+esc(l.note)+"</span>":"")+"</div>"});
+      $("lvList").innerHTML=h}
+    else{var m=["","يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];var h2="<div class=sec>قسائم الراتب — "+esc(j.name)+"</div>";
+      if(!j.payslips.length)h2+="<div class=item>لم تُنشر قسائم راتب بعد</div>";
+      var f=function(v){var n=parseFloat(String(v).replace(/,/g,""));return isNaN(n)?esc(v):n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})};
+      var row=function(k,v,cls){return "<div class='r "+(cls||"")+"'><span>"+k+"</span><span>"+f(v)+"</span></div>"};
+      j.payslips.forEach(function(s){h2+="<div class=slip><div class=h><span>"+(m[Number(s.Month)]||s.Month)+" "+esc(s.Year)+"</span><span>"+esc(s.Department)+"</span></div>"
+        +row("الأساسي",s.Basic)+row("بدل انتقال",s.Transport)+row("بدلات",s.Allowances)+row("سيرفس",s.Service)+row("إجمالي المستحق",s.Gross,"sub")
+        +row("تأمينات",s.Insurance,"neg")+row("تأمين صحي",s["Health Ins."],"neg")+row("جزاءات",s.Penalty,"neg")+row("غياب",s.Absent,"neg")+row("مرضي",s["Sick Leave"],"neg")+row("سُلف",s.Advance,"neg")+row("CL Staff",s["CL Staff"],"neg")+row("ضرائب",s.Tax,"neg")+row("إجمالي الخصومات",s.Deductions,"sub")
+        +row("صافي الراتب",s.Net,"net")+"</div>"});
+      $("slipList").innerHTML=h2}
+  }).catch(function(e){show("bad","❌ "+e.message)}).then(function(){busy=false})}
 document.addEventListener("visibilitychange",function(){if(!document.hidden&&cfg.require_photo){var t=stream&&stream.getVideoTracks()[0];if(!t||t.readyState!=="live"||t.muted)startCam()}});
 window.addEventListener("pageshow",function(){if(cfg.require_photo&&(!stream||stream.getVideoTracks()[0].readyState!=="live"))startCam()});
 function punch(type){if(busy)return;var clock=$("clock").value.trim(),pin=$("pin").value.trim();if(!clock){show("bad","أدخل رقم البصمة");return}
