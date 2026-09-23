@@ -127,6 +127,11 @@ function parseReply(t){try{return JSON.parse(t)}catch(e){
       if(/authori[sz]ation|تفويض|إذن/i.test(plain)) throw new Error("السكريبت يحتاج تفويضًا جديدًا (صلاحية Drive للصور): افتح Apps Script → شغّل الدالة photoFolder مرة → وافق على الأذونات → انشر إصدارًا جديدًا");
       throw new Error("رد غير متوقع من السيرفر: "+plain.slice(0,180))}}
 function api(body){
+  // حتى 3 محاولات (أخطاء جوجل العابرة مثل "unable to open the file at this time")
+  var delays=[2000,5000];
+  function attempt(i){return apiOnce(body).catch(function(e){if(i>=delays.length)throw e;return new Promise(function(r){setTimeout(r,delays[i])}).then(function(){return attempt(i+1)})})}
+  return attempt(0)}
+function apiOnce(body){
   // Apps Script يقبل CORS مع text/plain — ولو فشل POST (Failed to fetch) نجرّب GET تلقائيًا
   var json=JSON.stringify(body);
   return fetch(API,{method:"POST",body:json,headers:{"Content-Type":"text/plain;charset=utf-8"},redirect:"follow"})

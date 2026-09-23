@@ -1,5 +1,5 @@
 // MODO HR — Service Worker: يخزّن ملفات الصفحة للعمل السريع ويترك طلبات جوجل تمر للشبكة دائمًا
-var CACHE = "modo-hr-v3";
+var CACHE = "modo-hr-v5";
 var ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png", "./apple-touch-icon.png"];
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(ASSETS); }).then(function () { return self.skipWaiting(); }));
