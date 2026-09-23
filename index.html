@@ -117,7 +117,7 @@ window.addEventListener("online",netState);window.addEventListener("offline",net
 (function(){var ua=navigator.userAgent;if(/iPhone|iPad/.test(ua)&&!window.navigator.standalone){var b=document.getElementById("installBar");b.innerHTML="<span>📲 للتثبيت على iPhone: زر المشاركة ⬆︎ ثم «إضافة إلى الشاشة الرئيسية»</span>";b.style.display="flex"}})();
 
 // ── رابط Apps Script (ينتهي بـ /exec) ─────────────────────────────────────
-var API = "https://script.google.com/macros/s/AKfycbywnYqD8DrvLkhKgoMoVQqXwrak1sdYi_HjoRllgKHkLWJ28r1NaBiKlX5vQ4Z-wq5dhw/exec";
+var API = "https://script.google.com/macros/s/AKfycbyqly-gDyA3Ft4xyY0kVoyN_zfGL_csax3QQQmnDNqVFWKyENCvnrsaz0k57T1AkQixmw/exec";
 
 var $=function(i){return document.getElementById(i)};var busy=false;var cfg={require_pin:true,require_photo:true};var stream=null;
 try{var s=localStorage.getItem("modo_clock");if(s)$("clock").value=s}catch(e){}
