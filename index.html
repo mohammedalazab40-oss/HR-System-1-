@@ -117,9 +117,21 @@ window.addEventListener("online",netState);window.addEventListener("offline",net
 (function(){var ua=navigator.userAgent;if(/iPhone|iPad/.test(ua)&&!window.navigator.standalone){var b=document.getElementById("installBar");b.innerHTML="<span>📲 للتثبيت على iPhone: زر المشاركة ⬆︎ ثم «إضافة إلى الشاشة الرئيسية»</span>";b.style.display="flex"}})();
 
 // ── رابط Apps Script (ينتهي بـ /exec) ─────────────────────────────────────
-var API = "https://script.google.com/macros/s/AKfycbyqly-gDyA3Ft4xyY0kVoyN_zfGL_csax3QQQmnDNqVFWKyENCvnrsaz0k57T1AkQixmw/exec";
+var API = "https://script.google.com/macros/s/AKfycbxCcS1No6xhTNH75vscuj1ahaRPqPZLkhvrdvTzhLPjdz_zOlX0_NbcrO0xM0CX41qjPw/exec";
 
-var $=function(i){return document.getElementById(i)};var busy=false;var cfg={require_pin:true,require_photo:true};var stream=null;
+var $=function(i){return document.getElementById(i)};var busy=false;var cfg={require_pin:true,require_photo:true,require_face:false};var stream=null;
+// ── التحقق من الوجه (face-api.js) — يُحمَّل فقط لو مفعّل من البرنامج ──
+var FACE_CDN="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js";
+var FACE_MODELS="https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights";
+var faceReady=null;
+function loadFace(){if(faceReady)return faceReady;
+  faceReady=new Promise(function(res,rej){var sc=document.createElement("script");sc.src=FACE_CDN;sc.onload=res;sc.onerror=function(){rej(new Error("تعذّر تحميل نموذج الوجه"))};document.head.appendChild(sc)})
+  .then(function(){return Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODELS),faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODELS),faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODELS)])})
+  .then(function(){$("camHint").textContent="🧑 التحقق من الوجه جاهز — ضع وجهك داخل الدائرة"});
+  return faceReady}
+function faceDescriptor(){var v=$("vid");if(!stream||!v.videoWidth)return Promise.resolve(null);
+  return faceapi.detectSingleFace(v,new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:0.5})).withFaceLandmarks(true).withFaceDescriptor()
+  .then(function(r){if(!r)return null;var b=r.detection.box;if(b.width<v.videoWidth*0.18)return null;return Array.prototype.slice.call(r.descriptor).map(function(x){return Math.round(x*10000)/10000})})}
 try{var s=localStorage.getItem("modo_clock");if(s)$("clock").value=s}catch(e){}
 function show(c,t){var m=$("msg");m.className="msg "+c;m.textContent=t}
 function parseReply(t){try{return JSON.parse(t)}catch(e){
@@ -142,7 +154,7 @@ function apiOnce(body){
         .catch(function(e2){throw new Error("تعذّر الاتصال بالسيرفر (تحقق من الإنترنت) — "+e2.message)})})
     .then(parseReply);
 }
-api({action:"page_config"}).then(function(c){if(c&&c.ok){cfg=c;if(!c.require_pin)$("pinBox").style.display="none";if(!c.require_photo)$("camBox").style.display="none";else startCam()}}).catch(function(){startCam()});
+api({action:"page_config"}).then(function(c){if(c&&c.ok){cfg=c;if(!c.require_pin)$("pinBox").style.display="none";if(!c.require_photo)$("camBox").style.display="none";else startCam();if(c.require_face){$("camHint").textContent="⏳ جاري تحميل نموذج التعرف على الوجه (أول مرة فقط)…";loadFace().catch(function(e){$("camHint").textContent="⚠️ "+e.message})}}}).catch(function(){startCam()});
 function startCam(){$("btnCam").style.display="none";
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){$("camHint").textContent="⚠️ المتصفح لا يدعم الكاميرا — افتح الرابط في Chrome";return}
   navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:640},height:{ideal:640}},audio:false})
@@ -190,9 +202,14 @@ document.addEventListener("visibilitychange",function(){if(!document.hidden&&cfg
 window.addEventListener("pageshow",function(){if(cfg.require_photo&&(!stream||stream.getVideoTracks()[0].readyState!=="live"))startCam()});
 function punch(type){if(busy)return;var clock=$("clock").value.trim(),pin=$("pin").value.trim();if(!clock){show("bad","أدخل رقم البصمة");return}
   var photo=cfg.require_photo?snap():"";if(cfg.require_photo&&!photo){show("bad","📷 لم تُلتقط صورة الوجه — اسمح بالكاميرا وحاول مرة أخرى");return}
-  busy=true;$("btnIn").disabled=$("btnOut").disabled=true;show("info","⏳ جاري تحديد موقعك…");
-  getPos().then(function(p){var c=p.coords;$("gps").textContent="GPS: "+c.latitude.toFixed(5)+", "+c.longitude.toFixed(5)+" (±"+Math.round(c.accuracy)+"m)";show("info","⏳ جاري التحقق من الموقع…");
-    return api({action:"punch",clock_no:clock,pin:pin,lat:c.latitude,lng:c.longitude,accuracy:c.accuracy,type:type,device:navigator.userAgent,photo:photo})})
+  busy=true;$("btnIn").disabled=$("btnOut").disabled=true;
+  var facePromise=Promise.resolve(null);
+  if(cfg.require_face){show("info","🧑 جاري التعرف على الوجه…");facePromise=loadFace().then(faceDescriptor)}
+  facePromise.then(function(face){
+    if(cfg.require_face&&!face){throw new Error("لم يتم التعرف على وجه واضح — اقترب من الكاميرا في إضاءة جيدة وانظر إليها مباشرة")}
+    show("info","⏳ جاري تحديد موقعك…");
+    return getPos().then(function(p){var c=p.coords;$("gps").textContent="GPS: "+c.latitude.toFixed(5)+", "+c.longitude.toFixed(5)+" (±"+Math.round(c.accuracy)+"m)";show("info","⏳ جاري التحقق من الموقع…");
+    return api({action:"punch",clock_no:clock,pin:pin,lat:c.latitude,lng:c.longitude,accuracy:c.accuracy,type:type,device:navigator.userAgent,photo:photo,face:face})})})
   .then(function(j){if(j.ok){try{localStorage.setItem("modo_clock",clock)}catch(e){}show("ok",j.message+(j.name?"\n"+j.name:""));if(navigator.vibrate)navigator.vibrate(200)}else show("bad","❌ "+(j.message||j.error||"خطأ غير معروف — تأكد من نشر آخر إصدار من Code.gs"));done()})
   .catch(function(e){show("bad","❌ "+e.message);done()})}
 </script>
