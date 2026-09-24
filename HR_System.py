@@ -6,7 +6,7 @@ Manages employees, departments, attendance, leaves, and payroll
 """
 
 VERSION = "1.0.0"  # v54
-APP_BUILD = "2026-09-23.1"   # رقم البناء — التحديث التلقائي يقارن هذا الرقم بالنسخة الموجودة على الإنترنت
+APP_BUILD = "2026-09-24.1"   # رقم البناء — التحديث التلقائي يقارن هذا الرقم بالنسخة الموجودة على الإنترنت
 APP_NAME = "MODO HR"
 
 # ── شعار الفندق (Al Moudira Hotel logo) - مُضمَّن كـ Base64 لعرضه في تقارير PDF والشريط الجانبي ──
@@ -19681,7 +19681,10 @@ class HRSystemApp:
         settings_canvas.bind("<Configure>", lambda e, sc=settings_canvas, w=_sw: sc.itemconfig(w, width=e.width))
 
         def _settings_mw(event):
-            settings_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+            try:
+                settings_canvas.yview_scroll(int(-3*(event.delta/120)), "units")
+            except tk.TclError:
+                pass
             return "break"
         def _settings_mwl(event):
             if event.num == 4: settings_canvas.yview_scroll(-1, "units")
@@ -19694,6 +19697,15 @@ class HRSystemApp:
             settings_canvas.bind_all("<Button-5>",   _settings_mwl)
 
         def _deactivate_settings_scroll(event=None):
+            # لا نلغي التمرير عند دخول الفأرة على زر/أيقونة داخل الصفحة — فقط عند الخروج الفعلي منها
+            try:
+                w = self.root.winfo_containing(event.x_root, event.y_root) if event else None
+                while w is not None:
+                    if w == notebook:
+                        return
+                    w = w.master
+            except Exception:
+                pass
             settings_canvas.unbind_all("<MouseWheel>")
             settings_canvas.unbind_all("<Button-4>")
             settings_canvas.unbind_all("<Button-5>")
@@ -26294,69 +26306,106 @@ class HRSystemApp:
         load()
 
     def show_face_enrollments(self):
-        """نافذة اعتماد/رفض بصمات الوجه المسجّلة من الموبايل"""
-        w = tk.Toplevel(self.root); w.title("🧑 Face Enrollments — اعتماد الوجوه"); w.geometry("900x520"); w.configure(bg='white')
-        tk.Label(w, text="أول بصمة لكل موظف (مع تفعيل التحقق) تسجّل وجهه بحالة Pending. افتح الصورة وتأكد أنه صاحب الرقم ثم اعتمد.\n"
-                         "Approved = البصمات التالية تُقبل فقط إذا طابق الوجه · Rejected/Reset = يُعاد التسجيل في البصمة التالية",
-                 font=('Segoe UI', 9), bg='#F0FDFA', fg='#115E59', justify='right', padx=10, pady=8).pack(fill=tk.X)
-        f = tk.Frame(w, bg='white'); f.pack(fill=tk.BOTH, expand=True, padx=10, pady=8)
+        """صفحة اعتماد/رفض بصمات الوجه المسجّلة من الموبايل (داخل البرنامج بدون نوافذ منبثقة)"""
+        self.clear_content()
+        hdr = tk.Frame(self.content_frame, bg='#7C3AED', height=60); hdr.pack(fill=tk.X)
+        tb = tk.Frame(hdr, bg='#7C3AED'); tb.pack(side=tk.LEFT, padx=25, pady=12)
+        tk.Label(tb, text="🧑 FACE ENROLLMENTS  |  اعتماد الوجوه المسجّلة", font=('Arial', 16, 'bold'), bg='#7C3AED', fg='white').pack(anchor='w')
+        tk.Label(tb, text="أول بصمة لكل موظف تسجّل وجهه بحالة Pending — افتح الصورة وتأكد أنه صاحب الرقم ثم اعتمد. Rejected/Reset = يُعاد التسجيل في البصمة التالية",
+                 font=('Arial', 9), bg='#7C3AED', fg='#DDD6FE').pack(anchor='w')
+        tk.Button(hdr, text="← Back", font=('Arial', 10, 'bold'), bg='#2563EB', fg='white', bd=0, padx=20, pady=8, cursor='hand2',
+                  command=self.show_mobile_punch_settings).pack(side=tk.RIGHT, padx=25, pady=12)
+
+        body = tk.Frame(self.content_frame, bg='#F1F5F9'); body.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+        status_lbl = tk.Label(body, text="", font=('Arial', 10, 'bold'), bg='#F1F5F9', fg='#64748B', anchor='w')
+        status_lbl.pack(fill=tk.X, pady=(0, 6))
+
+        mid = tk.Frame(body, bg='#F1F5F9'); mid.pack(fill=tk.BOTH, expand=True)
+        left = tk.Frame(mid, bg='white', highlightbackground='#E2E8F0', highlightthickness=1); left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        right = tk.Frame(mid, bg='white', width=360, highlightbackground='#E2E8F0', highlightthickness=1); right.pack(side=tk.LEFT, fill=tk.Y, padx=(12, 0)); right.pack_propagate(False)
+        tk.Label(right, text="📷 Enrollment photo", font=('Arial', 11, 'bold'), bg='#F5F3FF', fg='#5B21B6').pack(fill=tk.X, pady=(0, 8), ipady=6)
+        photo_lbl = tk.Label(right, text="اختر موظفًا من الجدول لعرض صورته", bg='white', fg='#94A3B8', font=('Arial', 10), wraplength=320)
+        photo_lbl.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        photo_info = tk.Label(right, text="", bg='white', fg='#0F766E', font=('Arial', 10, 'bold')); photo_info.pack(pady=(0, 10))
+
         cols = ("emp", "name", "status", "enrolled", "decided")
-        tree = ttk.Treeview(f, columns=cols, show='headings', height=14)
-        for c, h, wd in [("emp", "Clock No", 80), ("name", "Employee", 260), ("status", "Status", 90), ("enrolled", "Enrolled", 140), ("decided", "Decided", 140)]:
+        tree = ttk.Treeview(left, columns=cols, show='headings')
+        for c, h, wd in [("emp", "Clock No", 80), ("name", "Employee", 240), ("status", "Status", 90), ("enrolled", "Enrolled", 140), ("decided", "Decided", 140)]:
             tree.heading(c, text=h); tree.column(c, width=wd, anchor='center' if c != 'name' else 'w')
-        sb = ttk.Scrollbar(f, orient='vertical', command=tree.yview); tree.configure(yscrollcommand=sb.set)
-        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True); sb.pack(side=tk.LEFT, fill=tk.Y)
+        sb = ttk.Scrollbar(left, orient='vertical', command=tree.yview); tree.configure(yscrollcommand=sb.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0), pady=8); sb.pack(side=tk.LEFT, fill=tk.Y, pady=8)
         tree.tag_configure('Pending', foreground='#B45309'); tree.tag_configure('Approved', foreground='#065F46'); tree.tag_configure('Rejected', foreground='#991B1B')
         photos = {}
         v_filter = tk.StringVar(value="Pending")
 
+        def set_status(txt, ok=True):
+            status_lbl.config(text=txt, fg='#0F766E' if ok else '#B91C1C')
+
         def load():
             tree.delete(*tree.get_children()); photos.clear()
-            try:
-                res = self.db.gsheet_request("pull_faces", {"status": "" if v_filter.get() == "All" else v_filter.get()})
-            except Exception as ex:
-                messagebox.showerror("Faces", str(ex), parent=w); return
-            for r in res.get("rows", []):
-                iid = tree.insert('', 'end', values=(r.get("emp_id"), r.get("name"), r.get("status"), r.get("enrolled"), r.get("decided")), tags=(r.get("status"),))
-                photos[iid] = r.get("photo", "")
+            set_status("⏳ Loading…")
+            def _work():
+                try:
+                    res = self.db.gsheet_request("pull_faces", {"status": "" if v_filter.get() == "All" else v_filter.get()})
+                    rows = res.get("rows", [])
+                    def _fill():
+                        for r in rows:
+                            iid = tree.insert('', 'end', values=(r.get("emp_id"), r.get("name"), r.get("status"), r.get("enrolled"), r.get("decided")), tags=(r.get("status"),))
+                            photos[iid] = r.get("photo", "")
+                        set_status("%d record(s) — %s" % (len(rows), v_filter.get()))
+                    self.root.after(0, _fill)
+                except Exception as ex:
+                    msg = str(ex)
+                    if "Unknown action" in msg:
+                        msg = "السكريبت المنشور قديم: الصق آخر Code.gs ثم إدارة عمليات النشر → ✏️ → إصدار جديد"
+                    self.root.after(0, lambda: set_status("✖ " + msg, ok=False))
+            threading.Thread(target=_work, daemon=True).start()
 
-        def view_photo(_e=None):
+        def show_photo(_e=None):
             sel = tree.selection()
-            if not sel or not photos.get(sel[0]):
-                messagebox.showinfo("Photo", "لا توجد صورة", parent=w); return
-            url = photos[sel[0]]; vals = tree.item(sel[0], "values")
-            try:
-                import urllib.request, io
-                from PIL import Image, ImageTk
-                raw = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "MODO-HR"}), timeout=30).read()
-                img = Image.open(io.BytesIO(raw)); img.thumbnail((420, 420))
-                pw = tk.Toplevel(w); pw.title("%s — %s" % (vals[0], vals[1])); pw.configure(bg='white')
-                pw._img = ImageTk.PhotoImage(img); tk.Label(pw, image=pw._img, bg='white').pack(padx=10, pady=10)
-            except Exception:
-                import webbrowser; webbrowser.open(url)
-        tree.bind("<Double-1>", view_photo)
+            if not sel:
+                return
+            vals = tree.item(sel[0], "values"); url = photos.get(sel[0], "")
+            photo_info.config(text="%s — %s" % (vals[0], vals[1]))
+            if not url:
+                photo_lbl.config(image='', text="لا توجد صورة لهذا التسجيل"); return
+            photo_lbl.config(image='', text="⏳ جاري تحميل الصورة…")
+            def _work():
+                try:
+                    import urllib.request, io
+                    from PIL import Image, ImageTk
+                    raw = urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "MODO-HR"}), timeout=30).read()
+                    img = Image.open(io.BytesIO(raw)); img.thumbnail((330, 330))
+                    def _set():
+                        if photo_lbl.winfo_exists():
+                            photo_lbl._img = ImageTk.PhotoImage(img); photo_lbl.config(image=photo_lbl._img, text="")
+                    self.root.after(0, _set)
+                except Exception as ex:
+                    self.root.after(0, lambda: photo_lbl.config(image='', text="تعذّر تحميل الصورة: %s" % ex))
+            threading.Thread(target=_work, daemon=True).start()
+        tree.bind("<<TreeviewSelect>>", show_photo)
 
         def decide(status):
             sel = tree.selection()
             if not sel:
-                messagebox.showwarning("Faces", "اختر موظفًا", parent=w); return
+                set_status("اختر موظفًا من الجدول أولًا", ok=False); return
             vals = tree.item(sel[0], "values")
-            if status == "Reset" and not messagebox.askyesno("Reset", "حذف الوجه المسجّل للموظف %s ليُعاد تسجيله في البصمة التالية؟" % vals[0], parent=w):
-                return
-            try:
-                self.db.gsheet_request("set_face_status", {"emp_id": vals[0], "status": status, "note": getattr(self, "current_user", "admin")})
-                self.db.log_activity("Face enrollment " + status, "%s (%s)" % (vals[1], vals[0]), category="attendance", user=getattr(self, "current_user", "admin"))
-                load()
-            except Exception as ex:
-                messagebox.showerror("Faces", str(ex), parent=w)
+            set_status("⏳ %s %s…" % (status, vals[0]))
+            def _work():
+                try:
+                    self.db.gsheet_request("set_face_status", {"emp_id": vals[0], "status": status, "note": getattr(self, "current_user", "admin")})
+                    self.db.log_activity("Face enrollment " + status, "%s (%s)" % (vals[1], vals[0]), category="attendance", user=getattr(self, "current_user", "admin"))
+                    self.root.after(0, load)
+                except Exception as ex:
+                    self.root.after(0, lambda: set_status("✖ " + str(ex), ok=False))
+            threading.Thread(target=_work, daemon=True).start()
 
-        b = tk.Frame(w, bg='white'); b.pack(fill=tk.X, padx=10, pady=(0, 10))
+        b = tk.Frame(body, bg='#F1F5F9'); b.pack(fill=tk.X, pady=(8, 0))
         ttk.Combobox(b, textvariable=v_filter, values=["Pending", "Approved", "Rejected", "All"], width=10, state='readonly').pack(side=tk.LEFT)
-        tk.Button(b, text="🔄 Refresh", bg='#94A3B8', fg='white', relief=tk.FLAT, padx=12, pady=6, command=load).pack(side=tk.LEFT, padx=6)
-        tk.Button(b, text="📷 View photo", bg='#3B82F6', fg='white', relief=tk.FLAT, padx=12, pady=6, command=view_photo).pack(side=tk.LEFT)
-        tk.Button(b, text="✅ Approve", bg='#10B981', fg='white', relief=tk.FLAT, padx=14, pady=6, font=('Segoe UI', 9, 'bold'), command=lambda: decide("Approved")).pack(side=tk.LEFT, padx=6)
-        tk.Button(b, text="❌ Reject", bg='#EF4444', fg='white', relief=tk.FLAT, padx=14, pady=6, command=lambda: decide("Rejected")).pack(side=tk.LEFT)
-        tk.Button(b, text="🔁 Reset face", bg='#F59E0B', fg='white', relief=tk.FLAT, padx=14, pady=6, command=lambda: decide("Reset")).pack(side=tk.LEFT, padx=6)
+        tk.Button(b, text="🔄 Refresh", bg='#94A3B8', fg='white', relief=tk.FLAT, padx=12, pady=6, cursor='hand2', command=load).pack(side=tk.LEFT, padx=6)
+        tk.Button(b, text="✅ Approve", bg='#10B981', fg='white', relief=tk.FLAT, padx=14, pady=6, font=('Segoe UI', 9, 'bold'), cursor='hand2', command=lambda: decide("Approved")).pack(side=tk.LEFT, padx=6)
+        tk.Button(b, text="❌ Reject", bg='#EF4444', fg='white', relief=tk.FLAT, padx=14, pady=6, cursor='hand2', command=lambda: decide("Rejected")).pack(side=tk.LEFT)
+        tk.Button(b, text="🔁 Reset face", bg='#F59E0B', fg='white', relief=tk.FLAT, padx=14, pady=6, cursor='hand2', command=lambda: decide("Reset")).pack(side=tk.LEFT, padx=6)
         load()
 
     def publish_mobile_payslips(self, month, year):
@@ -26405,7 +26454,14 @@ class HRSystemApp:
         win = canvas.create_window((0, 0), window=body, anchor="nw")
         body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.bind("<Configure>", lambda e: canvas.itemconfig(win, width=e.width))
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1 * (e.delta / 120)), "units"))
+        def _mp_wheel(e):
+            try:
+                if canvas.winfo_exists():
+                    canvas.yview_scroll(int(-3 * (e.delta / 120)), "units")
+            except tk.TclError:
+                pass
+        canvas.bind_all("<MouseWheel>", _mp_wheel)
+        canvas.bind("<Destroy>", lambda e: canvas.unbind_all("<MouseWheel>"))
 
         main = tk.Frame(body, bg='#F1F5F9')
         main.pack(fill=tk.BOTH, expand=True, padx=30, pady=20)
